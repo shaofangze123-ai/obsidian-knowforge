@@ -1,0 +1,9 @@
+{
+  "id": "knowforge",
+  "name": "KnowForge",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "将 Web Clipper 剪藏通过 AI 编译为结构化知识卡片，支持 RAG 检索和智能问答",
+  "author": "ZJ",
+  "isDesktopOnly": false
+}
