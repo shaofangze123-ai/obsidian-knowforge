@@ -70,6 +70,15 @@ function ChatApp({ plugin }: ChatAppProps) {
     const text = input.trim();
     if (!text || streaming) return;
 
+    if (!plugin.llmClient) {
+      setMessages(prev => [...prev,
+        { role: 'user', content: text },
+        { role: 'assistant', content: '请先在设置中配置 API Key，然后重启 Obsidian。' },
+      ]);
+      setInput('');
+      return;
+    }
+
     const userMsg: ChatMessage = { role: 'user', content: text };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -78,6 +87,14 @@ function ChatApp({ plugin }: ChatAppProps) {
     setRagSources([]);
 
     try {
+      // 获取当前活跃笔记内容
+      let activeNoteContext = '';
+      const activeFile = plugin.app.workspace.getActiveFile();
+      if (activeFile && activeFile.extension === 'md') {
+        const content = await plugin.app.vault.read(activeFile);
+        activeNoteContext = `\n\n当前打开的笔记「${activeFile.basename}」内容如下：\n\n${content}`;
+      }
+
       // RAG 检索
       let systemPrompt = '你是一个知识管理助手，帮助用户整理和理解他们的知识库。请使用中文回答。';
 
@@ -89,10 +106,15 @@ function ChatApp({ plugin }: ChatAppProps) {
         }
       }
 
+      // 注入当前笔记上下文
+      if (activeNoteContext) {
+        systemPrompt += activeNoteContext;
+      }
+
       // 构建消息列表（含系统提示）
       const contextMessages: ChatMessage[] = [
         { role: 'user', content: systemPrompt },
-        { role: 'model', content: '好的，我会根据知识库内容来回答你的问题。' },
+        { role: 'assistant', content: '好的，我会根据知识库内容来回答你的问题。' },
       ];
 
       // 保留最近 N 轮对话
@@ -101,10 +123,10 @@ function ChatApp({ plugin }: ChatAppProps) {
       contextMessages.push(...recentMessages);
 
       // 流式响应
-      const assistantMsg: ChatMessage = { role: 'model', content: '' };
+      const assistantMsg: ChatMessage = { role: 'assistant', content: '' };
       setMessages(prev => [...prev, assistantMsg]);
 
-      const stream = plugin.geminiClient!.chatStream(
+      const stream = plugin.llmClient!.chatStream(
         contextMessages,
         plugin.settings.temperature,
       );
@@ -120,7 +142,7 @@ function ChatApp({ plugin }: ChatAppProps) {
 
       // 如果流式返回空内容，fallback 到非流式
       if (!assistantMsg.content) {
-        const reply = await plugin.geminiClient!.chat(
+        const reply = await plugin.llmClient!.chat(
           contextMessages,
           plugin.settings.temperature,
         );
@@ -133,7 +155,7 @@ function ChatApp({ plugin }: ChatAppProps) {
       }
     } catch (err: any) {
       const errorMsg: ChatMessage = {
-        role: 'model',
+        role: 'assistant',
         content: `出错了: ${err.message}`,
       };
       setMessages(prev => [...prev.slice(0, -1), errorMsg]);
