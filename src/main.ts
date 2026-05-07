@@ -1,7 +1,7 @@
 import { Plugin, TFile, Notice, WorkspaceLeaf } from 'obsidian';
 import type { KnowForgeSettings } from './types';
 import { DEFAULT_SETTINGS, KnowForgeSettingTab } from './settings';
-import { GeminiClient } from './gemini';
+import { LLMClient } from './llm';
 import { VectorStore } from './vectorStore';
 import { RAGEngine } from './rag';
 import { IntakeProcessor } from './intake';
@@ -11,7 +11,7 @@ const VECTOR_INDEX_FILE = 'knowforge-data/vector-index.json';
 
 export default class KnowForgePlugin extends Plugin {
   settings: KnowForgeSettings = DEFAULT_SETTINGS;
-  geminiClient: GeminiClient | null = null;
+  llmClient: LLMClient | null = null;
   vectorStore: VectorStore = new VectorStore();
   ragEngine: RAGEngine | null = null;
   intakeProcessor: IntakeProcessor | null = null;
@@ -19,8 +19,8 @@ export default class KnowForgePlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    // 初始化 Gemini 客户端
-    if (this.settings.geminiApiKey) {
+    // 初始化 LLM 客户端
+    if (this.settings.apiKey) {
       this.initServices();
     }
 
@@ -56,7 +56,7 @@ export default class KnowForgePlugin extends Plugin {
 
     this.addCommand({
       id: 'test-connection',
-      name: '测试 Gemini 连接',
+      name: '测试 API 连接',
       callback: () => this.testConnection(),
     });
 
@@ -67,7 +67,6 @@ export default class KnowForgePlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on('create', (file) => {
         if (file instanceof TFile && this.shouldAutoProcess(file)) {
-          // 延迟处理，等文件内容写入完成
           setTimeout(() => this.autoProcessFile(file), 2000);
         }
       }),
@@ -85,7 +84,6 @@ export default class KnowForgePlugin extends Plugin {
   }
 
   onunload() {
-    // 保存向量索引
     this.saveVectorIndex();
     console.log('KnowForge plugin unloaded');
   }
@@ -93,15 +91,16 @@ export default class KnowForgePlugin extends Plugin {
   // ===== 初始化 =====
 
   initServices(): void {
-    this.geminiClient = new GeminiClient(
-      this.settings.geminiApiKey,
+    this.llmClient = new LLMClient(
+      this.settings.apiBaseUrl,
+      this.settings.apiKey,
       this.settings.chatModel,
       this.settings.embeddingModel,
     );
 
     this.ragEngine = new RAGEngine(
       this.vectorStore,
-      this.geminiClient,
+      this.llmClient,
       this.settings.ragTopK,
       this.settings.ragSimilarityThreshold,
     );
@@ -109,7 +108,7 @@ export default class KnowForgePlugin extends Plugin {
     this.intakeProcessor = new IntakeProcessor(
       this.app.vault,
       this.settings,
-      this.geminiClient,
+      this.llmClient,
       this.vectorStore,
     );
   }
@@ -123,13 +122,13 @@ export default class KnowForgePlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
 
-    // 更新服务配置
-    if (this.settings.geminiApiKey) {
-      if (!this.geminiClient) {
+    if (this.settings.apiKey) {
+      if (!this.llmClient) {
         this.initServices();
       } else {
-        this.geminiClient.updateConfig(
-          this.settings.geminiApiKey,
+        this.llmClient.updateConfig(
+          this.settings.apiBaseUrl,
+          this.settings.apiKey,
           this.settings.chatModel,
           this.settings.embeddingModel,
         );
@@ -183,7 +182,6 @@ export default class KnowForgePlugin extends Plugin {
       const json = this.vectorStore.serialize();
       const dataFolder = this.settings.dataFolder;
 
-      // 确保数据文件夹存在
       if (!this.app.vault.getAbstractFileByPath(dataFolder)) {
         await this.app.vault.createFolder(dataFolder);
       }
@@ -210,16 +208,14 @@ export default class KnowForgePlugin extends Plugin {
   }
 
   private async autoProcessFile(file: TFile): Promise<void> {
-    if (!this.intakeProcessor || !this.geminiClient) {
-      return;
-    }
+    if (!this.intakeProcessor || !this.llmClient) return;
     await this.intakeProcessor.processFile(file);
     await this.saveVectorIndex();
   }
 
   private async processIntake(): Promise<void> {
-    if (!this.intakeProcessor || !this.geminiClient) {
-      new Notice('KnowForge: 请先配置 Gemini API Key');
+    if (!this.intakeProcessor || !this.llmClient) {
+      new Notice('KnowForge: 请先配置 API Key');
       return;
     }
 
@@ -232,8 +228,8 @@ export default class KnowForgePlugin extends Plugin {
   // ===== Rebuild Index =====
 
   private async rebuildIndex(): Promise<void> {
-    if (!this.geminiClient) {
-      new Notice('KnowForge: 请先配置 Gemini API Key');
+    if (!this.llmClient) {
+      new Notice('KnowForge: 请先配置 API Key');
       return;
     }
 
@@ -248,7 +244,7 @@ export default class KnowForgePlugin extends Plugin {
     for (const file of files) {
       try {
         const content = await this.app.vault.read(file);
-        await this.vectorStore.indexFile(file.path, content, file.stat.mtime, this.geminiClient);
+        await this.vectorStore.indexFile(file.path, content, file.stat.mtime, this.llmClient);
         indexed++;
       } catch (err) {
         console.warn(`KnowForge: 索引失败 ${file.path}`, err);
@@ -262,15 +258,15 @@ export default class KnowForgePlugin extends Plugin {
   // ===== Test Connection =====
 
   private async testConnection(): Promise<void> {
-    if (!this.geminiClient) {
-      new Notice('KnowForge: 请先配置 Gemini API Key');
+    if (!this.llmClient) {
+      new Notice('KnowForge: 请先配置 API Key');
       return;
     }
 
     new Notice('KnowForge: 测试连接中...');
-    const result = await this.geminiClient.testConnection();
+    const result = await this.llmClient.testConnection();
     if (result.success) {
-      new Notice('KnowForge: Gemini 连接成功!');
+      new Notice('KnowForge: API 连接成功!');
     } else {
       new Notice('KnowForge: 连接失败 — ' + (result.error || '未知错误'));
     }

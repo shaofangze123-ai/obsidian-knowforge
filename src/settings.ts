@@ -3,9 +3,10 @@ import type KnowForgePlugin from './main';
 import type { KnowForgeSettings } from './types';
 
 export const DEFAULT_SETTINGS: KnowForgeSettings = {
-  geminiApiKey: '',
-  chatModel: 'gemini-2.0-flash',
-  embeddingModel: 'text-embedding-004',
+  apiBaseUrl: 'https://ai.opendoor.cn',
+  apiKey: '',
+  chatModel: 'gpt-4.1-mini',
+  embeddingModel: 'text-embedding-3-small',
   intakeFolder: 'KF-Intake',
   cardsFolder: 'KF-Cards',
   dataFolder: 'knowforge-data',
@@ -31,19 +32,30 @@ export class KnowForgeSettingTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'KnowForge 设置' });
 
     new Setting(containerEl)
-      .setName('Gemini API Key')
-      .setDesc('Google AI Studio 获取: https://aistudio.google.com/apikey')
+      .setName('API 地址')
+      .setDesc('OpenAI 兼容 API 的基础地址')
       .addText(text => text
-        .setPlaceholder('输入 API Key')
-        .setValue(this.plugin.settings.geminiApiKey)
+        .setPlaceholder('https://api.openai.com')
+        .setValue(this.plugin.settings.apiBaseUrl)
         .onChange(async (value) => {
-          this.plugin.settings.geminiApiKey = value;
+          this.plugin.settings.apiBaseUrl = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('API Key')
+      .setDesc('API 密钥')
+      .addText(text => text
+        .setPlaceholder('sk-...')
+        .setValue(this.plugin.settings.apiKey)
+        .onChange(async (value) => {
+          this.plugin.settings.apiKey = value;
           await this.plugin.saveSettings();
         }));
 
     new Setting(containerEl)
       .setName('Chat 模型')
-      .setDesc('Gemini 聊天模型名称')
+      .setDesc('聊天模型名称')
       .addText(text => text
         .setValue(this.plugin.settings.chatModel)
         .onChange(async (value) => {
@@ -53,7 +65,7 @@ export class KnowForgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Embedding 模型')
-      .setDesc('Gemini 向量嵌入模型名称')
+      .setDesc('向量嵌入模型名称（留空则禁用 RAG）')
       .addText(text => text
         .setValue(this.plugin.settings.embeddingModel)
         .onChange(async (value) => {

@@ -1,5 +1,5 @@
 import type { VectorRecord, VectorIndex, SearchResult } from './types';
-import type { GeminiClient } from './gemini';
+import type { LLMClient } from './llm';
 
 const CURRENT_VERSION = 1;
 
@@ -78,7 +78,7 @@ export class VectorStore {
     filePath: string,
     content: string,
     mtime: number,
-    gemini: GeminiClient,
+    llm: LLMClient,
   ): Promise<void> {
     // 移除旧记录
     this.removeFile(filePath);
@@ -86,7 +86,7 @@ export class VectorStore {
     const chunks = VectorStore.chunkText(content);
     if (chunks.length === 0) return;
 
-    const vectors = await gemini.embedBatch(chunks);
+    const vectors = await llm.embedBatch(chunks);
 
     for (let i = 0; i < chunks.length; i++) {
       const vec = vectors[i];
@@ -128,13 +128,13 @@ export class VectorStore {
    */
   async search(
     query: string,
-    gemini: GeminiClient,
+    llm: LLMClient,
     topK = 5,
     threshold = 0.3,
   ): Promise<SearchResult[]> {
     if (this.index.records.length === 0) return [];
 
-    const queryVec = await gemini.embed(query);
+    const queryVec = await llm.embed(query);
     if (queryVec.length === 0) return [];
 
     return this.searchByVector(queryVec, topK, threshold);

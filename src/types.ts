@@ -1,7 +1,7 @@
 // ===== Chat 层 =====
 
 export interface ChatMessage {
-  role: 'user' | 'model';
+  role: 'user' | 'assistant';
   content: string;
 }
 
@@ -65,7 +65,8 @@ export interface RAGContext {
 // ===== Settings =====
 
 export interface KnowForgeSettings {
-  geminiApiKey: string;
+  apiBaseUrl: string;
+  apiKey: string;
   chatModel: string;
   embeddingModel: string;
   intakeFolder: string;

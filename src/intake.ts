@@ -1,6 +1,6 @@
 import { TFile, Vault, Notice } from 'obsidian';
 import type { KnowForgeSettings, KnowledgeCardMeta } from './types';
-import type { GeminiClient } from './gemini';
+import type { LLMClient } from './llm';
 import type { VectorStore } from './vectorStore';
 import { parseFrontmatter, stripFrontmatter, generateFrontmatter, cleanTags } from './frontmatter';
 
@@ -30,19 +30,19 @@ CONTENT:
 export class IntakeProcessor {
   private vault: Vault;
   private settings: KnowForgeSettings;
-  private gemini: GeminiClient;
+  private llm: LLMClient;
   private vectorStore: VectorStore;
   private processing = new Set<string>();
 
   constructor(
     vault: Vault,
     settings: KnowForgeSettings,
-    gemini: GeminiClient,
+    llm: LLMClient,
     vectorStore: VectorStore,
   ) {
     this.vault = vault;
     this.settings = settings;
-    this.gemini = gemini;
+    this.llm = llm;
     this.vectorStore = vectorStore;
   }
 
@@ -75,8 +75,8 @@ export class IntakeProcessor {
         return;
       }
 
-      // 调用 Gemini 生成知识卡片
-      const result = await this.gemini.chat(
+      // 调用 LLM 生成知识卡片
+      const result = await this.llm.chat(
         [{ role: 'user', content: PROCESS_PROMPT + body }],
         0.3,
       );
@@ -119,7 +119,7 @@ export class IntakeProcessor {
       await this.markStatus(file, content, 'processed');
 
       // 索引到向量存储
-      await this.vectorStore.indexFile(cardPath, card.content, Date.now(), this.gemini);
+      await this.vectorStore.indexFile(cardPath, card.content, Date.now(), this.llm);
 
       new Notice('KnowForge: 已生成知识卡片 — ' + card.title);
     } catch (err: any) {
@@ -184,7 +184,7 @@ export interface ParsedCard {
 }
 
 /**
- * 解析 Gemini 返回的卡片格式
+ * 解析 LLM 返回的卡片格式
  */
 export function parseCardResponse(response: string): ParsedCard | null {
   if (!response) return null;

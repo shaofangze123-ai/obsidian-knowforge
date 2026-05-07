@@ -1,6 +1,6 @@
 import type { SearchResult, RAGContext } from './types';
 import type { VectorStore } from './vectorStore';
-import type { GeminiClient } from './gemini';
+import type { LLMClient } from './llm';
 
 /**
  * RAG 上下文组装器
@@ -8,18 +8,18 @@ import type { GeminiClient } from './gemini';
  */
 export class RAGEngine {
   private vectorStore: VectorStore;
-  private gemini: GeminiClient;
+  private llm: LLMClient;
   private topK: number;
   private threshold: number;
 
   constructor(
     vectorStore: VectorStore,
-    gemini: GeminiClient,
+    llm: LLMClient,
     topK = 5,
     threshold = 0.3,
   ) {
     this.vectorStore = vectorStore;
-    this.gemini = gemini;
+    this.llm = llm;
     this.topK = topK;
     this.threshold = threshold;
   }
@@ -35,7 +35,7 @@ export class RAGEngine {
   async retrieve(query: string): Promise<RAGContext> {
     const results = await this.vectorStore.search(
       query,
-      this.gemini,
+      this.llm,
       this.topK,
       this.threshold,
     );
